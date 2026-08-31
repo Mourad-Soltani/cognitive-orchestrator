@@ -243,6 +243,19 @@ When buyers ask *"Does it hallucinate?"* — show them the exact `memory_forgott
 
 ---
 
+## Theory Document
+
+The complete mathematical foundation of this architecture is available in [theory.pdf](theory.pdf).
+
+This 40+ page document includes:
+- Formal definitions of all 7 subsystems
+- 3 theorems with mathematical proofs
+- Formula-to-code cross-reference tables
+- Telemetry schema and Behavioral Black Box specification
+- Acquisition value proposition and pricing tiers
+
+Every formula in the PDF has a corresponding, tested line of Python in this repository.
+
 ## License
 
 MIT — See acquisition materials for commercial licensing terms.
