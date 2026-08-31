@@ -144,7 +144,7 @@ def generate_report(
 
     lines = [
         "# Cognitive Orchestrator — Validation Report",
-        f"**Generated:** {datetime.utcnow().isoformat()}",
+        f"**Generated:** {datetime.now(timezone.utc).isoformat()}",
         f"**Test Cases:** {len(results)}",
         "",
         "## Executive Summary",
@@ -187,9 +187,9 @@ def generate_report(
             f"**Input:** {r['input']}",
             "",
             "**Orchestrator Output:**",
-            f"```
-{r['final_output'][:500]}
-```",
+            "```",
+            r['final_output'][:500],
+            "```",
             "",
             "**Top Intuitions:**",
         ])
@@ -205,7 +205,7 @@ def generate_report(
         "The following JSON logs prove every decision is inspectable:",
         "",
         "```json",
-        json.dumps(results[0].get("telemetry_sample", {}), indent=2) if results else "{}",
+        (json.dumps(results[0].get("telemetry_sample", {}), indent=2) if results else "{}"),
         "```",
         "",
         "## Conclusion",

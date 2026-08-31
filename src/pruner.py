@@ -42,9 +42,11 @@ def prune_intuitions(intuitions: Sequence[Intuition], top_k: int | None = None) 
     Returns:
         Ordered list of PrunedIntuition, highest priority first
     """
-    k = top_k or settings.pruner_top_k
+    k = top_k if top_k is not None else settings.pruner_top_k
     if k < 1:
         raise ValueError(f"top_k must be >= 1, got {k}")
+    if len(intuitions) == 0:
+        raise ValueError("Cannot prune empty intuition sequence")
 
     scored = [
         PrunedIntuition(intuition=it, priority=compute_priority(it))
@@ -52,5 +54,5 @@ def prune_intuitions(intuitions: Sequence[Intuition], top_k: int | None = None) 
     ]
 
     # heapq.nlargest is deterministic and O(n log k)
-    top = heapq.nlargest(k, scored, key=lambda p: p.priority)
+    top = heapq.nlargest(min(k, len(scored)), scored, key=lambda p: p.priority)
     return top

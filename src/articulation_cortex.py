@@ -142,19 +142,22 @@ class ArticulationCortex:
     def _compute_temperature(self, chunk_index: int) -> float:
         """Logistic decay function for per-chunk temperature.
 
-        temp = T_start - (T_start - T_end) / (1 + exp(k * (chunk_index - midpoint)))
+        temp = T_end + (T_start - T_end) / (1 + exp(k * (chunk_index - midpoint)))
 
         Where:
         - T_start = 1.2 (high creativity at start)
         - T_end = 0.3 (low creativity / high coherence at end)
         - k = 0.5 (steepness)
         - midpoint = 5 (inflection point)
+
+        At chunk_index=0: temp ≈ T_start (1.2)
+        At chunk_index=5: temp ≈ (T_start + T_end) / 2 (0.75)
+        At chunk_index→∞: temp → T_end (0.3)
         """
         t_start = settings.articulation_temp_start
         t_end = settings.articulation_temp_end
         k = 0.5
         midpoint = 5
 
-        decay = (t_start - t_end) / (1 + math.exp(k * (chunk_index - midpoint)))
-        temp = t_start - decay
+        temp = t_end + (t_start - t_end) / (1 + math.exp(k * (chunk_index - midpoint)))
         return temp

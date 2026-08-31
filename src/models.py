@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, Field
 from typing import Literal, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class Intuition(BaseModel):
@@ -38,7 +38,7 @@ class DialecticOutput(BaseModel):
     option_a_argument: str = Field(..., max_length=500)
     option_b_counter: str = Field(..., max_length=500)
     synthesis: str = Field(..., max_length=500)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class Thesis(BaseModel):
@@ -46,7 +46,7 @@ class Thesis(BaseModel):
 
     content: str = Field(..., max_length=500)
     source_debate: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class InsightEvent(BaseModel):
@@ -56,7 +56,7 @@ class InsightEvent(BaseModel):
     noise_vector_sample: list[float]
     first_token_prob: Optional[float] = None
     flagged_token: Optional[str] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class ArticulationChunk(BaseModel):

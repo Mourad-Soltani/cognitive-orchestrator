@@ -6,7 +6,7 @@ Every decision the Agent makes emits a structured JSON log
 
 import structlog
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from src.config import settings
@@ -55,7 +55,7 @@ def emit_event(
         event_type,
         log_id=lid,
         session_id=session_id,
-        timestamp=datetime.utcnow().isoformat(),
+        timestamp=datetime.now(timezone.utc).isoformat(),
         payload=payload,
     )
     return lid
