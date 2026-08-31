@@ -256,6 +256,10 @@ This 40+ page document includes:
 
 Every formula in the PDF has a corresponding, tested line of Python in this repository.
 
+## Acquisition & Pricing
+
+This project is available for acquisition. See [PRICING.md](PRICING.md) for detailed tiers, deliverables, and the 'Validate Before You Buy' guarantee.
+
 ## License
 
 MIT — See acquisition materials for commercial licensing terms.
