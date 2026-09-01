@@ -7,7 +7,7 @@ report comparing results to baseline GPT-4o.
 
 Usage:
     export OPENAI_API_KEY=sk-...
-    python validate.py [--mock] [--output-dir ./reports]
+    python validate.py [--mock] [--output-dir ./reports] [--llm-provider openai|groq|mock]
 
 See PDF §4 (Zero-Code Validation Protocol) for derivation.
 """
@@ -17,7 +17,7 @@ import asyncio
 import json
 import time
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +26,7 @@ from openai import AsyncOpenAI
 from src.config import settings
 from src.models import OrchestratorRequest
 from src.orchestrator import CognitiveOrchestrator
+from src.llm_client import OpenAIClient, GroqClient
 
 
 # ── 50 Curated Test Cases ──────────────────────────────────────────
@@ -225,17 +226,29 @@ def generate_report(
     return report_path
 
 
-async def run_validation(mock: bool = False, output_dir: Path = Path("./reports")) -> None:
+async def run_validation(
+    mock: bool = False,
+    output_dir: Path = Path("./reports"),
+    llm_provider: str = "openai",
+) -> None:
     """Execute the full validation harness."""
     print("=" * 60)
     print("COGNITIVE ORCHESTRATOR — VALIDATION HARNESS")
+    print(f"Provider: {llm_provider}")
     print("=" * 60)
 
-    client = AsyncOpenAI(
-        api_key=settings.openai_api_key,
-        base_url=settings.openai_base_url,
-    )
-    orchestrator = CognitiveOrchestrator(client=client)
+    if llm_provider == "groq":
+        client = GroqClient(
+            api_key=settings.groq_api_key or "",
+            model=settings.groq_model,
+        )
+    else:
+        client = AsyncOpenAI(
+            api_key=settings.openai_api_key,
+            base_url=settings.openai_base_url,
+        )
+
+    orchestrator = CognitiveOrchestrator(client=client if llm_provider == "openai" else None)
     results: list[dict[str, Any]] = []
     baseline_results: list[dict[str, Any]] = []
 
@@ -265,10 +278,8 @@ async def run_validation(mock: bool = False, output_dir: Path = Path("./reports"
                 "score": 0.5,
             }
         else:
-            request = OrchestratorRequest(
-                user_input=test["input"],
-                session_id=f"val-{test['id']}",
-            )
+            request = OrchestratorRequest(user_input=test["input"])
+            t0 = time.perf_counter()
             try:
                 response = await orchestrator.process(request)
                 result = {
@@ -284,59 +295,51 @@ async def run_validation(mock: bool = False, output_dir: Path = Path("./reports"
                     "log_id": response.log_id,
                 }
             except Exception as e:
-                print(f"      ERROR: {e}")
                 result = {
                     "id": test["id"],
                     "category": test["category"],
                     "input": test["input"],
-                    "final_output": f"[ERROR] {e}",
+                    "final_output": f"ERROR: {e}",
                     "top_intuitions": [],
-                    "dialectic_summary": None,
-                    "insight_event": {"triggered": False},
+                    "dialectic_summary": "",
+                    "insight_event": {"triggered": False, "noise_vector_sample": []},
                     "latency_ms": 0.0,
-                    "session_id": "error",
-                    "log_id": "error",
+                    "session_id": "",
+                    "log_id": "",
                 }
-            try:
-                baseline = await baseline_gpt4o(client, test["input"])
-                baseline["score"] = 0.5
-            except Exception as e:
-                print(f"      BASELINE ERROR: {e}")
-                baseline = {"output": f"[ERROR] {e}", "latency_ms": 0.0, "tokens": 0, "score": 0.0}
 
-        result["scores"] = score_response(result)
+            # Baseline only for OpenAI (Groq doesn't have gpt-4o)
+            if llm_provider == "openai":
+                baseline = await baseline_gpt4o(client, test["input"])
+            else:
+                baseline = {
+                    "output": "[N/A — baseline only supported for OpenAI]",
+                    "latency_ms": 0.0,
+                    "tokens": 0,
+                    "score": 0.5,
+                }
+
+        scores = score_response(result)
+        result["scores"] = scores
         result["baseline_latency_ms"] = baseline["latency_ms"]
-        result["baseline_output"] = baseline["output"]
-        result["baseline_score"] = baseline.get("score", 0.5)
+        result["baseline_score"] = 0.5  # neutral baseline
         results.append(result)
         baseline_results.append(baseline)
-        print(f"      Orchestrator Score: {result['scores']['aggregate']:.3f}")
-        print(f"      Latency: {result['latency_ms']:.1f}ms")
+        print(f"      Orchestrator Score: {scores['aggregate']:.3f}")
 
     report_path = generate_report(results, baseline_results, output_dir)
-    json_path = output_dir / f"validation_raw_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-    json_path.write_text(json.dumps({"results": results, "baseline": baseline_results}, indent=2), encoding="utf-8")
-
-    print("\n" + "=" * 60)
-    print("VALIDATION COMPLETE")
-    print("=" * 60)
-    print(f"Report:  {report_path}")
-    print(f"Raw JSON: {json_path}")
-    orch_avg = sum(r["scores"]["aggregate"] for r in results) / len(results)
-    base_avg = sum(r["baseline_score"] for r in results) / len(results)
-    print(f"\nAverage Human-Likeness Score:")
-    print(f"  Orchestrator:  {orch_avg:.3f}")
-    print(f"  Baseline:      {base_avg:.3f}")
-    print(f"  Delta:         +{orch_avg - base_avg:+.3f}")
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Cognitive Orchestrator Validation Harness")
-    parser.add_argument("--mock", action="store_true", help="Run in mock mode (no API calls)")
-    parser.add_argument("--output-dir", type=Path, default=Path("./reports"), help="Output directory")
-    args = parser.parse_args()
-    asyncio.run(run_validation(mock=args.mock, output_dir=args.output_dir))
+    print(f"\n✅ Report written to: {report_path}")
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Cognitive Orchestrator Validation")
+    parser.add_argument("--mock", action="store_true", help="Run in mock mode")
+    parser.add_argument("--output-dir", type=Path, default=Path("./reports"))
+    parser.add_argument("--llm-provider", type=str, default="openai", choices=["openai", "groq", "mock"])
+    args = parser.parse_args()
+
+    asyncio.run(run_validation(
+        mock=args.mock or args.llm_provider == "mock",
+        output_dir=args.output_dir,
+        llm_provider=args.llm_provider,
+    ))

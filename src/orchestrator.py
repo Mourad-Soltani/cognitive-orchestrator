@@ -1,16 +1,17 @@
 """The Core Orchestrator — The 150ms Clock.
 
-Spawns 5 sub-agent calls concurrently using asyncio.gather().
-Enforces asyncio.timeout(0.15) on the entire first pass.
-If the Somatic Arbiter doesn't finish, defaults to safe options.
-
-See PDF §3.1 (Core Orchestrator) for derivation.
+Now with:
+- Pluggable LLM client (OpenAI / Groq)
+- Redis-backed recency buffer
+- Real tiktoken insight spike
+- Graceful fallback on failure
 """
 
 import asyncio
 import time
 import uuid
-from typing import Sequence
+from datetime import datetime, timezone
+from typing import Sequence, Optional
 
 from openai import AsyncOpenAI
 
@@ -27,42 +28,55 @@ from src.telemetry import emit_event
 from src.pruner import prune_intuitions
 from src.somatic_arbiter import SomaticArbiter
 from src.dialectic_council import DialecticCouncil
-from src.recency_buffer import RecencyBuffer
-from src.insight_spike import InsightSpike
+from src.llm_client import OpenAIClient, GroqClient, BaseLLMClient
+from src.recency_buffer_redis import RecencyBufferRedis
+from src.insight_spike_real import InsightSpikeReal
 from src.articulation_cortex import ArticulationCortex
+from src.fallback import get_fallback_response
 
 
 class CognitiveOrchestrator:
     """Main orchestrator managing the full cognitive pipeline."""
 
-    def __init__(self, client: AsyncOpenAI | None = None):
-        self.client = client or AsyncOpenAI(
-            api_key=settings.openai_api_key,
-            base_url=settings.openai_base_url,
+    def __init__(self, client: Optional[AsyncOpenAI] = None):
+        # --- NEW: Abstracted LLM layer ---
+        if settings.llm_provider == "groq" and settings.groq_api_key:
+            self.llm: BaseLLMClient = GroqClient(
+                api_key=settings.groq_api_key,
+                model=settings.groq_model,
+                timeout=settings.orchestrator_timeout_ms / 1000,
+            )
+        else:
+            self.llm = OpenAIClient(
+                api_key=settings.openai_api_key,
+                model=settings.openai_model,
+                timeout=settings.orchestrator_timeout_ms / 1000,
+            )
+
+        # Legacy components still expect AsyncOpenAI; extract it when using OpenAI
+        openai_client = None
+        if isinstance(self.llm, OpenAIClient):
+            openai_client = self.llm.client
+        elif client:
+            openai_client = client
+
+        self.arbiter = SomaticArbiter(client=openai_client)
+        self.council = DialecticCouncil(client=openai_client)
+        self.cortex = ArticulationCortex(client=openai_client)
+
+        # --- NEW: Redis buffer + real insight spike ---
+        self.buffer = RecencyBufferRedis(
+            redis_url=settings.redis_url,
+            maxlen=settings.buffer_maxlen,
         )
-        self.arbiter = SomaticArbiter(client=self.client)
-        self.council = DialecticCouncil(client=self.client)
-        self.buffer = RecencyBuffer(client=self.client)
-        self.spike = InsightSpike()
-        self.cortex = ArticulationCortex(client=self.client)
+        self.spike = InsightSpikeReal(
+            model_name=settings.openai_model,
+            noise_std=settings.insight_noise_std,
+            threshold=settings.insight_threshold,
+        )
 
     async def process(self, request: OrchestratorRequest) -> OrchestratorResponse:
-        """Process a user request through the full cognitive pipeline.
-
-        Pipeline:
-        1. Somatic Arbiter (batched, 5 intuitions)
-        2. Pruner (deterministic, top-2)
-        3. Dialectic Council (constrained debate)
-        4. Recency Buffer (compression + state update)
-        5. Insight Spike (noise injection)
-        6. Articulation Cortex (paced output)
-
-        Args:
-            request: Validated user request
-
-        Returns:
-            OrchestratorResponse with full telemetry
-        """
+        """Process a user request through the full cognitive pipeline."""
         session_id = request.session_id or str(uuid.uuid4())
         log_id = str(uuid.uuid4())
         start_time = time.perf_counter()
@@ -78,95 +92,115 @@ class CognitiveOrchestrator:
             log_id=log_id,
         )
 
-        # --- Step 1: Somatic Arbiter (with 150ms timeout) ---
-        intuitions = await self._run_arbiter(
-            request.user_input,
-            session_id,
-            request.context_override,
-        )
+        try:
+            # --- Step 1: Somatic Arbiter (with timeout) ---
+            intuitions = await self._run_arbiter(
+                request.user_input,
+                session_id,
+                request.context_override,
+            )
 
-        # --- Step 2: Pruner (deterministic, instant) ---
-        top_intuitions = prune_intuitions(intuitions)
+            # --- Step 2: Pruner ---
+            top_intuitions = prune_intuitions(intuitions)
 
-        emit_event(
-            event_type="pruner_complete",
-            session_id=session_id,
-            payload={
-                "top_k": len(top_intuitions),
-                "pruned": [p.model_dump() for p in top_intuitions],
-            },
-        )
-
-        # --- Step 3: Dialectic Council ---
-        if len(top_intuitions) >= 2:
-            debate = await self.council.debate(
-                option_a=top_intuitions[0].intuition,
-                option_b=top_intuitions[1].intuition,
-                user_input=request.user_input,
+            emit_event(
+                event_type="pruner_complete",
                 session_id=session_id,
-                context=self.buffer.context_string,
-            )
-        else:
-            # Fallback if pruning returned < 2
-            debate = DialecticOutput(
-                option_a_argument="Single intuition dominant",
-                option_b_counter="No counter available",
-                synthesis=top_intuitions[0].intuition.one_liner if top_intuitions else "No output",
+                payload={
+                    "top_k": len(top_intuitions),
+                    "pruned": [p.model_dump() for p in top_intuitions],
+                },
             )
 
-        # --- Step 4: Recency Buffer ---
-        await self.buffer.push(debate, session_id)
+            # --- Step 3: Dialectic Council ---
+            if len(top_intuitions) >= 2:
+                debate = await self.council.debate(
+                    option_a=top_intuitions[0].intuition,
+                    option_b=top_intuitions[1].intuition,
+                    user_input=request.user_input,
+                    session_id=session_id,
+                    context=await self._get_context(session_id),
+                )
+            else:
+                debate = DialecticOutput(
+                    option_a_argument="Single intuition dominant",
+                    option_b_counter="No counter available",
+                    synthesis=top_intuitions[0].intuition.one_liner if top_intuitions else "No output",
+                )
 
-        # --- Step 5: Insight Spike ---
-        noise = self.spike.generate_noise(dim=5)
-        insight_boost = self.spike.get_temperature_boost()
+            # --- Step 4: Recency Buffer (Redis) ---
+            await self.buffer.add(session_id, {
+                "user_input": request.user_input,
+                "final_output": debate.synthesis,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
 
-        # Evaluate first token (conceptual — in production, use logprobs)
-        insight_event = InsightEvent(
-            triggered=False,  # Will be updated if we get logprobs
-            noise_vector_sample=noise,
-        )
+            # --- Step 5: Insight Spike (real logit bias ready) ---
+            insight_data = self.spike.inject(debate.synthesis)
+            insight_boost = abs(insight_data["z"]) * 2.0 if insight_data["insight_event"] else 0.0
 
-        # --- Step 6: Articulation Cortex ---
-        chunks = []
-        async for chunk in self.cortex.articulate(
-            synthesis=debate.synthesis,
-            session_id=session_id,
-            insight_boost=insight_boost,
-        ):
-            chunks.append(chunk)
+            insight_event = InsightEvent(
+                triggered=insight_data["insight_event"],
+                noise_vector_sample=[insight_data["z"]],
+                first_token_prob=None,
+                flagged_token=insight_data.get("boosted_token"),
+            )
 
-        final_output = " ".join(c.text for c in chunks)
+            # --- Step 6: Articulation Cortex ---
+            chunks = []
+            async for chunk in self.cortex.articulate(
+                synthesis=debate.synthesis,
+                session_id=session_id,
+                insight_boost=insight_boost,
+            ):
+                chunks.append(chunk)
 
-        # Update insight event if first token was low probability
-        # (In production, this would use the actual logprob from the API)
-        # For RI, we simulate based on noise magnitude
-        if insight_boost > 0.3:
-            insight_event.triggered = True
-            insight_event.first_token_prob = 0.25
+            final_output = " ".join(c.text for c in chunks)
 
-        latency_ms = (time.perf_counter() - start_time) * 1000
+            latency_ms = (time.perf_counter() - start_time) * 1000
 
-        emit_event(
-            event_type="orchestrator_complete",
-            session_id=session_id,
-            payload={
-                "latency_ms": round(latency_ms, 2),
-                "final_output_length": len(final_output),
-                "chunks_count": len(chunks),
-            },
-            log_id=log_id,
-        )
+            emit_event(
+                event_type="orchestrator_complete",
+                session_id=session_id,
+                payload={
+                    "latency_ms": round(latency_ms, 2),
+                    "final_output_length": len(final_output),
+                    "chunks_count": len(chunks),
+                    "insight_z": insight_data["z"],
+                    "boosted_token": insight_data.get("boosted_token"),
+                },
+                log_id=log_id,
+            )
 
-        return OrchestratorResponse(
-            final_output=final_output,
-            top_intuitions=top_intuitions,
-            dialectic_summary=debate.synthesis,
-            insight_event=insight_event,
-            session_id=session_id,
-            latency_ms=round(latency_ms, 2),
-            log_id=log_id,
-        )
+            return OrchestratorResponse(
+                final_output=final_output,
+                top_intuitions=top_intuitions,
+                dialectic_summary=debate.synthesis,
+                insight_event=insight_event,
+                session_id=session_id,
+                latency_ms=round(latency_ms, 2),
+                log_id=log_id,
+            )
+
+        except Exception as e:
+            emit_event(
+                event_type="orchestrator_error",
+                session_id=session_id,
+                payload={"error": str(e)},
+                log_id=log_id,
+            )
+            fallback = get_fallback_response(e)
+            return OrchestratorResponse(
+                final_output=fallback["final_output"],
+                top_intuitions=[],
+                dialectic_summary=fallback["error"],
+                insight_event=InsightEvent(triggered=False, noise_vector_sample=[]),
+                session_id=session_id,
+                latency_ms=round((time.perf_counter() - start_time) * 1000, 2),
+                log_id=log_id,
+            )
+        finally:
+            await self.buffer.close()
 
     async def _run_arbiter(
         self,
@@ -174,12 +208,8 @@ class CognitiveOrchestrator:
         session_id: str,
         context_override: str | None,
     ) -> Sequence[Intuition]:
-        """Run the Somatic Arbiter with a strict timeout.
-
-        If the arbiter exceeds 150ms, return safe default intuitions.
-        """
         timeout_sec = settings.orchestrator_timeout_ms / 1000.0
-        context = context_override or self.buffer.context_string
+        context = context_override or await self._get_context(session_id)
 
         try:
             async with asyncio.timeout(timeout_sec):
@@ -199,8 +229,17 @@ class CognitiveOrchestrator:
             )
             return self._safe_defaults()
 
+    async def _get_context(self, session_id: str) -> str | None:
+        items = await self.buffer.get(session_id)
+        if not items:
+            return None
+        parts = []
+        for item in items:
+            text = item.get("user_input", "") or item.get("final_output", "")
+            parts.append(str(text)[:200])
+        return " | ".join(parts)
+
     def _safe_defaults(self) -> Sequence[Intuition]:
-        """Pre-calculated safe options when arbiter times out."""
         return [
             Intuition(
                 mode="Cautious",

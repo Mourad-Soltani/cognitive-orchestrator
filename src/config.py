@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     openai_base_url: str = Field("https://api.openai.com/v1", description="OpenAI base URL")
     openai_model: str = Field("gpt-4o-mini", description="Primary LLM model")
 
+    # Groq
+    groq_api_key: str | None = Field(None, description="Groq API key")
+    groq_model: str = Field("llama3-8b-8192", description="Groq model")
+    llm_provider: str = Field("openai", description="LLM provider: openai or groq")
+
     # Orchestrator
     orchestrator_timeout_ms: int = Field(150, ge=50, le=5000)
     max_concurrent_agents: int = Field(5, ge=1, le=20)
@@ -48,6 +53,11 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = Field("INFO")
     log_format: str = Field("json")
+
+    # NEW: Infrastructure
+    redis_url: str | None = Field("redis://localhost:6379/0", description="Redis URL for distributed buffer")
+    api_keys: str | None = Field(None, description="Comma-separated valid API keys")
+    rate_limit: str = Field("10/minute", description="Default rate limit string")
 
 
 settings = Settings()

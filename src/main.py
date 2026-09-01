@@ -1,25 +1,24 @@
-"""FastAPI application — REST endpoints for the Cognitive Orchestrator.
-
-Instant OpenAPI spec generation at /docs and /redoc.
-"""
+"""FastAPI application — REST endpoints for the Cognitive Orchestrator."""
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.responses import StreamingResponse
 from contextlib import asynccontextmanager
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
 
 from src.models import OrchestratorRequest, OrchestratorResponse
 from src.orchestrator import CognitiveOrchestrator
 from src.telemetry import logger
+from src.auth import limiter, validate_api_key, get_limiter
+from src.config import settings
 
 
-# Global orchestrator instance (in-memory state)
 _orchestrator: CognitiveOrchestrator | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage orchestrator lifecycle."""
     global _orchestrator
     _orchestrator = CognitiveOrchestrator()
     logger.info("orchestrator_initialized")
@@ -30,52 +29,50 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Cognitive Orchestrator API",
     description=(
-        "Reference Implementation of a bounded-recall, insight-spiking "
-        "cognitive architecture. See README.md for mathematical cross-references."
+        "Enterprise-grade cognitive backend with bounded recall, insight spikes, "
+        "and pluggable LLM providers (OpenAI / Groq)."
     ),
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.get("/health")
 async def health() -> dict:
-    """Health check endpoint."""
-    return {"status": "ok", "version": "0.1.0"}
+    return {"status": "ok", "version": "0.2.0", "provider": settings.llm_provider}
 
 
 @app.post("/orchestrate", response_model=OrchestratorResponse)
-async def orchestrate(request: OrchestratorRequest) -> OrchestratorResponse:
-    """Run the full cognitive pipeline on a user input.
-
-    Returns the final output, top intuitions, dialectic summary,
-    insight event, and full telemetry correlation IDs.
-    """
+@limiter.limit(settings.rate_limit)
+async def orchestrate(
+    request: OrchestratorRequest,
+    request_obj: Request,
+    api_key: str = Depends(validate_api_key),
+) -> OrchestratorResponse:
     if _orchestrator is None:
         raise HTTPException(status_code=503, detail="Orchestrator not initialized")
-
     try:
-        response = await _orchestrator.process(request)
-        return response
+        return await _orchestrator.process(request)
     except Exception as e:
         logger.error("orchestrator_error", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/orchestrate/stream")
-async def orchestrate_stream(request: OrchestratorRequest) -> StreamingResponse:
-    """Stream the Articulation Cortex output chunk by chunk.
-
-    Each chunk includes the per-chunk temperature and any
-    injected human-like delays.
-    """
+@limiter.limit(settings.rate_limit)
+async def orchestrate_stream(
+    request: OrchestratorRequest,
+    request_obj: Request,
+    api_key: str = Depends(validate_api_key),
+) -> StreamingResponse:
     if _orchestrator is None:
         raise HTTPException(status_code=503, detail="Orchestrator not initialized")
 
     async def event_generator():
         result = await _orchestrator.process(request)
-        # Re-run articulation to get streaming chunks
-        # (In production, this would be a single streaming call)
         from src.articulation_cortex import ArticulationCortex
         cortex = ArticulationCortex()
         async for chunk in cortex.articulate(
@@ -92,7 +89,6 @@ async def orchestrate_stream(request: OrchestratorRequest) -> StreamingResponse:
 
 
 def main() -> None:
-    """CLI entrypoint."""
     uvicorn.run(
         "src.main:app",
         host="0.0.0.0",
