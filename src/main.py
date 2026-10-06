@@ -13,10 +13,12 @@ from src.telemetry import logger
 from src.auth import limiter, validate_api_key, get_limiter
 from src.config import settings
 from src.articulation_cortex_stream import ArticulationCortexStream
+from src.gateway import DecisionLedger, VendorDecisionRequest
 
 
 _orchestrator: CognitiveOrchestrator | None = None
-APP_VERSION = "0.3.0"
+_ledger = DecisionLedger()
+APP_VERSION = "0.4.0"
 
 
 @asynccontextmanager
@@ -50,7 +52,39 @@ async def health() -> dict:
         "status": "ok",
         "version": APP_VERSION,
         "provider": settings.llm_provider,
+        "product": "governed-decision-gateway",
     }
+
+
+@app.post("/decisions/vendor")
+@limiter.limit(settings.rate_limit)
+async def decide_vendor(
+    request: VendorDecisionRequest,
+    request_obj: Request,
+    api_key: str = Depends(validate_api_key),
+) -> dict:
+    """Vendor-onboarding decision with policy gate and evidence pack."""
+    if _orchestrator is None:
+        raise HTTPException(status_code=503, detail="Orchestrator not initialized")
+    status, reason = _ledger.evaluate(request)
+    orchestrated = None
+    if status in {"approved", "needs_human"}:
+        prompt = (
+            f"Vendor onboarding decision for {request.vendor_name}. "
+            f"Spend ${request.spend_usd:.0f}. Data {request.data_classification}. "
+            f"Country {request.country}. Owner {request.business_owner}. {request.notes}"
+        )
+        orchestrated = await _orchestrator.process(
+            OrchestratorRequest(user_input=prompt, session_id=request.session_id)
+        )
+    pack = _ledger.record(request, status, reason, orchestrated)
+    return pack.model_dump()
+
+
+@app.get("/audit/export")
+async def audit_export(api_key: str = Depends(validate_api_key)) -> dict:
+    """Hash-chained evidence packs for the current process."""
+    return _ledger.export()
 
 
 @app.post("/orchestrate", response_model=OrchestratorResponse)
