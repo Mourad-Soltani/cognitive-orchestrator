@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     )
 
     # OpenAI
-    openai_api_key: str = Field(..., description="OpenAI API key")
+    openai_api_key: str = Field("", description="OpenAI API key")
     openai_base_url: str = Field("https://api.openai.com/v1", description="OpenAI base URL")
     openai_model: str = Field("gpt-4o-mini", description="Primary LLM model")
 

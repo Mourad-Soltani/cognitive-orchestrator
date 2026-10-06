@@ -34,6 +34,7 @@ class ArticulationCortex:
         synthesis: str,
         session_id: str,
         insight_boost: float = 0.0,
+        logit_bias: dict | None = None,
     ) -> AsyncIterator[ArticulationChunk]:
         """Generate paced, temperature-modulated output chunks.
 
@@ -52,7 +53,7 @@ class ArticulationCortex:
         # response and then splitting it. In production, this would
         # use the streaming API with real-time temperature switching.
 
-        full_text = await self._generate_full(synthesis, insight_boost, session_id)
+        full_text = await self._generate_full(synthesis, insight_boost, session_id, logit_bias=logit_bias)
         chunks = self._chunk_text(full_text, chunk_size=8)
 
         for idx, chunk_text in enumerate(chunks):
@@ -84,19 +85,15 @@ class ArticulationCortex:
         synthesis: str,
         insight_boost: float,
         session_id: str,
+        logit_bias: dict | None = None,
     ) -> str:
-        """Generate the full response text.
-
-        Uses the starting temperature (highest) for the API call.
-        In production, this would be replaced with per-token
-        temperature control via logit_bias or multiple API calls.
-        """
+        """Generate the full response text with optional insight logit_bias."""
         temp = settings.articulation_temp_start + insight_boost
         temp = max(0.0, min(2.0, temp))
 
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
+        kwargs = {
+            "model": self.model,
+            "messages": [
                 {
                     "role": "system",
                     "content": (
@@ -110,9 +107,16 @@ class ArticulationCortex:
                     "content": f"Articulate this synthesis naturally:\n{synthesis}",
                 },
             ],
-            temperature=temp,
-            max_tokens=settings.articulation_max_tokens,
-        )
+            "temperature": temp,
+            "max_tokens": settings.articulation_max_tokens,
+        }
+        # Apply real insight spike logit bias when present (OpenAI-compatible)
+        if logit_bias:
+            # API expects {token_id: bias} with int keys
+            normalized = {int(k): float(v) for k, v in logit_bias.items()}
+            kwargs["logit_bias"] = normalized
+
+        response = await self.client.chat.completions.create(**kwargs)
 
         text = response.choices[0].message.content or ""
 
@@ -122,6 +126,7 @@ class ArticulationCortex:
             payload={
                 "temperature_used": temp,
                 "insight_boost": insight_boost,
+                "logit_bias_applied": bool(logit_bias),
                 "output_length_chars": len(text),
             },
         )

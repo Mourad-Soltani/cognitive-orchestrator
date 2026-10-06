@@ -1,8 +1,7 @@
 """Tests for the abstracted LLM client layer."""
 
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
-import httpx
+from unittest.mock import AsyncMock, MagicMock
 
 from src.llm_client import BaseLLMClient, OpenAIClient, GroqClient
 
@@ -48,13 +47,13 @@ async def test_openai_client_generate_success():
     mock_response.choices = [MagicMock()]
     mock_response.choices[0].message.content = "Hello world"
 
-    with patch("openai.AsyncOpenAI") as mock_cls:
-        instance = mock_cls.return_value
-        instance.chat.completions.create = AsyncMock(return_value=mock_response)
+    client = OpenAIClient(api_key="test-key")
+    # Patch the instance method so no real network call is made
+    client.client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-        client = OpenAIClient(api_key="test")
-        result = await client.generate([{"role": "user", "content": "hi"}])
-        assert result == "Hello world"
+    result = await client.generate([{"role": "user", "content": "hi"}])
+    assert result == "Hello world"
+    client.client.chat.completions.create.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -63,10 +62,8 @@ async def test_openai_client_generate_empty_response():
     mock_response.choices = [MagicMock()]
     mock_response.choices[0].message.content = None
 
-    with patch("openai.AsyncOpenAI") as mock_cls:
-        instance = mock_cls.return_value
-        instance.chat.completions.create = AsyncMock(return_value=mock_response)
+    client = OpenAIClient(api_key="test-key")
+    client.client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-        client = OpenAIClient(api_key="test")
-        result = await client.generate([{"role": "user", "content": "hi"}])
-        assert result == ""
+    result = await client.generate([{"role": "user", "content": "hi"}])
+    assert result == ""

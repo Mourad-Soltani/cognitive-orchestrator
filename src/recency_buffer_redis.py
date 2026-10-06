@@ -20,6 +20,10 @@ class RecencyBufferRedis:
             self._client = redis.from_url(self.redis_url, decode_responses=True)
         return self._client
 
+    async def push(self, session_id: str, entry: Dict) -> None:
+        """Alias for add() — backward compatibility with older callers/tests."""
+        await self.add(session_id, entry)
+
     async def add(self, session_id: str, entry: Dict) -> None:
         client = await self._get_client()
         key = f"buffer:{session_id}"

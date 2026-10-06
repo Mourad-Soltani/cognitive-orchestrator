@@ -135,9 +135,10 @@ class CognitiveOrchestrator:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             })
 
-            # --- Step 5: Insight Spike (real logit bias ready) ---
+            # --- Step 5: Insight Spike (real logit bias) ---
             insight_data = self.spike.inject(debate.synthesis)
             insight_boost = abs(insight_data["z"]) * 2.0 if insight_data["insight_event"] else 0.0
+            logit_bias = insight_data.get("logit_bias") or None
 
             insight_event = InsightEvent(
                 triggered=insight_data["insight_event"],
@@ -146,12 +147,13 @@ class CognitiveOrchestrator:
                 flagged_token=insight_data.get("boosted_token"),
             )
 
-            # --- Step 6: Articulation Cortex ---
+            # --- Step 6: Articulation Cortex (with insight logit_bias) ---
             chunks = []
             async for chunk in self.cortex.articulate(
                 synthesis=debate.synthesis,
                 session_id=session_id,
                 insight_boost=insight_boost,
+                logit_bias=logit_bias,
             ):
                 chunks.append(chunk)
 
@@ -200,7 +202,9 @@ class CognitiveOrchestrator:
                 log_id=log_id,
             )
         finally:
-            await self.buffer.close()
+            # Keep Redis connection alive across requests for production throughput.
+            # Call orchestrator.shutdown() on app lifespan teardown if needed.
+            pass
 
     async def _run_arbiter(
         self,
@@ -282,3 +286,8 @@ class CognitiveOrchestrator:
                 novelty=0.3,
             ),
         ]
+
+
+    async def shutdown(self) -> None:
+        """Release shared resources (Redis connection). Call on app shutdown."""
+        await self.buffer.close()
