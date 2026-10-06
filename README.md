@@ -235,3 +235,14 @@ This repository is maintained by Mourad Soltani.
 ## 📄 License
 
 This project is licensed under the MIT License for non-commercial/open-source use. Commercial use requires acquisition (see `PRICING.md`).
+
+
+## Live demo and latency
+
+Offline demo (no API key, no Redis). Measures local pipeline overhead only:
+
+```bash
+python demo.py
+```
+
+Writes `reports/latency.json`. Measured median on 2026-10-06 was **0.109 ms** local overhead (p95 **0.347 ms**) across 50 mocked runs. See `LATENCY.md`. Provider round-trips are not included.

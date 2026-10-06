@@ -1,0 +1,23 @@
+{
+  "mode": "offline_mocked_llm",
+  "iterations": 50,
+  "note": "Measures local pipeline overhead with mocked arbiter, council, and cortex. Does not include provider network time.",
+  "preview": {
+    "input": "Should I pivot my startup?",
+    "output": "Ship the narrowest reversible version and measure it.",
+    "top_modes": [
+      "Logical",
+      "Cautious"
+    ],
+    "insight_triggered": false,
+    "reported_latency_ms": 9.44
+  },
+  "latency_ms": {
+    "min": 0.098,
+    "mean": 0.319,
+    "median": 0.109,
+    "p95": 0.347,
+    "p99": 9.527,
+    "max": 9.527
+  }
+}
