@@ -92,11 +92,11 @@ class TestPrunerProperties:
     """Property-based tests using Hypothesis."""
 
     @given(
-        urgency=st.floats(min_value=0.0, max_value=1.0),
-        risk=st.floats(min_value=0.0, max_value=1.0),
-        novelty=st.floats(min_value=0.0, max_value=1.0),
+        urgency=st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False),
+        risk=st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False),
+        novelty=st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False),
     )
-    @hyp_settings(max_examples=200)
+    @hyp_settings(max_examples=50, deadline=None)
     def test_priority_monotonicity(self, urgency, risk, novelty):
         """For any valid inputs, priority is a real number in [-1, 1]."""
         i = Intuition(

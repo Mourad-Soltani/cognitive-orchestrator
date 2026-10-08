@@ -59,25 +59,25 @@ async def health() -> dict:
 @app.post("/decisions/vendor")
 @limiter.limit(settings.rate_limit)
 async def decide_vendor(
-    request: VendorDecisionRequest,
-    request_obj: Request,
+    request: Request,
+    body: VendorDecisionRequest,
     api_key: str = Depends(validate_api_key),
 ) -> dict:
     """Vendor-onboarding decision with policy gate and evidence pack."""
     if _orchestrator is None:
         raise HTTPException(status_code=503, detail="Orchestrator not initialized")
-    status, reason = _ledger.evaluate(request)
+    status, reason = _ledger.evaluate(body)
     orchestrated = None
     if status in {"approved", "needs_human"}:
         prompt = (
-            f"Vendor onboarding decision for {request.vendor_name}. "
-            f"Spend ${request.spend_usd:.0f}. Data {request.data_classification}. "
-            f"Country {request.country}. Owner {request.business_owner}. {request.notes}"
+            f"Vendor onboarding decision for {body.vendor_name}. "
+            f"Spend ${body.spend_usd:.0f}. Data {body.data_classification}. "
+            f"Country {body.country}. Owner {body.business_owner}. {body.notes}"
         )
         orchestrated = await _orchestrator.process(
-            OrchestratorRequest(user_input=prompt, session_id=request.session_id)
+            OrchestratorRequest(user_input=prompt, session_id=body.session_id)
         )
-    pack = _ledger.record(request, status, reason, orchestrated)
+    pack = _ledger.record(body, status, reason, orchestrated)
     return pack.model_dump()
 
 
@@ -90,14 +90,14 @@ async def audit_export(api_key: str = Depends(validate_api_key)) -> dict:
 @app.post("/orchestrate", response_model=OrchestratorResponse)
 @limiter.limit(settings.rate_limit)
 async def orchestrate(
-    request: OrchestratorRequest,
-    request_obj: Request,
+    request: Request,
+    body: OrchestratorRequest,
     api_key: str = Depends(validate_api_key),
 ) -> OrchestratorResponse:
     if _orchestrator is None:
         raise HTTPException(status_code=503, detail="Orchestrator not initialized")
     try:
-        return await _orchestrator.process(request)
+        return await _orchestrator.process(body)
     except Exception as e:
         logger.error("orchestrator_error", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
@@ -106,8 +106,8 @@ async def orchestrate(
 @app.post("/orchestrate/stream")
 @limiter.limit(settings.rate_limit)
 async def orchestrate_stream(
-    request: OrchestratorRequest,
-    request_obj: Request,
+    request: Request,
+    body: OrchestratorRequest,
     api_key: str = Depends(validate_api_key),
 ) -> StreamingResponse:
     """Stream the final articulation as SSE after the cognitive pipeline runs.
@@ -120,7 +120,7 @@ async def orchestrate_stream(
         raise HTTPException(status_code=503, detail="Orchestrator not initialized")
 
     async def event_generator():
-        result = await _orchestrator.process(request)
+        result = await _orchestrator.process(body)
         synthesis = result.final_output or result.dialectic_summary or ""
 
         # Pace the already-generated synthesis as SSE chunks

@@ -39,14 +39,10 @@ def _response() -> OrchestratorResponse:
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setenv("API_KEYS", "")
-    # Re-import after env so VALID_KEYS stays empty (open auth) for these tests.
-    import importlib
     import src.auth as auth
     import src.main as main
 
     auth.VALID_KEYS = set()
-    importlib.reload(auth)
-    # Keep the already-constructed app; patch validator to open mode.
     main.validate_api_key = auth.validate_api_key
     with TestClient(main.app) as test_client:
         yield test_client
@@ -57,7 +53,8 @@ def test_health(client):
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert body["version"] == "0.3.0"
+    assert body["version"] == "0.4.0"
+    assert body["product"] == "governed-decision-gateway"
 
 
 def test_orchestrate_returns_pipeline_result(client):
