@@ -128,3 +128,7 @@ Run `validate.py` with your own API key. If the Orchestrator does not exceed bas
 - **Differentiator:** Not just code – but a regulatory-ready, benchmark-proven cognitive theory that no other acquisition target can replicate.
 
 **Contact:** Mourad Soltani | github.com/Mourad-Soltani/cognitive-orchestrator
+
+## License note
+
+The public repository uses **Business Source License 1.1** (see `LICENSE`). Production and pilot use require a signed commercial agreement. Copyright is held by Mourad Soltani pending assignment to an operating company (see `COPYRIGHT`).

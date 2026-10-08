@@ -2,7 +2,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/version-0.4.0-blue.svg" alt="Version 0.4.0">
   <img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.11+">
-  <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License MIT">
+  <img src="https://img.shields.io/badge/license-BSL%201.1-blue.svg" alt="License BSL 1.1">
   <img src="https://img.shields.io/badge/LLM-OpenAI%20%26%20Groq-brightgreen" alt="OpenAI & Groq">
   <img src="https://img.shields.io/badge/State-Redis-orange" alt="Redis State">
   <img src="https://img.shields.io/badge/Status-Production%20Ready-brightgreen" alt="Production Ready">
@@ -234,7 +234,14 @@ This repository is maintained by Mourad Soltani.
 
 ## 📄 License
 
-This project is licensed under the MIT License for non-commercial/open-source use. Commercial use requires acquisition (see `PRICING.md`).
+**Business Source License 1.1 (BSL 1.1)** — see [`LICENSE`](LICENSE).
+
+- **Allowed without a commercial agreement:** non-production evaluation, development, and testing.
+- **Requires a commercial agreement:** production use, live enterprise workflows, paid services, and design-partner pilots (governed by SOW / order form).
+- **Copyright:** Mourad Soltani (see [`COPYRIGHT`](COPYRIGHT)). IP may be assigned to an operating company owned by the founder; the LICENSE Parameters name the Licensor and any successor assignee.
+- After the Change Date (see LICENSE), the Change License is Apache License 2.0.
+
+Pricing and acquisition context: `PRICING.md`. Pilot terms: `pilot-campaign/`.
 
 
 

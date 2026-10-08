@@ -8,7 +8,7 @@ version = "0.4.0"
 description = "Enterprise-grade cognitive backend with bounded recall, insight spikes, and pluggable LLM providers"
 readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "MIT"}
+license = {text = "Business Source License 1.1"}
 authors = [
     {name = "Mourad Soltani", email = "mourad@example.com"}
 ]

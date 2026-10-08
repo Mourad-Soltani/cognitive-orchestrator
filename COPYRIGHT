@@ -1,0 +1,31 @@
+Copyright (c) 2026 Mourad Soltani
+
+All rights in and to the Cognitive Orchestrator software, documentation,
+trademarks, and related intellectual property (the "IP") are owned by
+Mourad Soltani unless and until assigned in writing.
+
+Anticipated assignment
+----------------------
+The copyright owner intends to assign the IP to an operating company
+wholly owned by Mourad Soltani (name to be designated in a formal
+assignment agreement). Upon execution of that assignment:
+
+  1. The operating company becomes the Licensor and copyright owner
+     for all purposes under LICENSE (Business Source License 1.1).
+  2. Existing commercial agreements (pilots, platform orders) remain
+     in force; the assignee assumes the Licensor's rights and
+     obligations under those agreements as specified in the assignment.
+  3. No further action is required from evaluation users under BSL 1.1
+     solely because of the change of legal entity, provided the
+     successor is identified in a repository notice or LICENSE update.
+
+Until assignment is recorded in this file and in LICENSE Parameters,
+treat Mourad Soltani as the sole Licensor and copyright owner.
+
+Notices
+-------
+- This repository is licensed under the Business Source License 1.1
+  (see LICENSE). It is not MIT-licensed.
+- Production use requires a commercial agreement.
+- Third-party dependencies retain their own licenses (see package
+  metadata and NOTICE if present).
