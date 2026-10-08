@@ -1,6 +1,6 @@
 <!-- markdownlint-disable MD033 -->
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.3.0-blue.svg" alt="Version 0.3.0">
+  <img src="https://img.shields.io/badge/version-0.4.0-blue.svg" alt="Version 0.4.0">
   <img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.11+">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License MIT">
   <img src="https://img.shields.io/badge/LLM-OpenAI%20%26%20Groq-brightgreen" alt="OpenAI & Groq">
@@ -24,7 +24,7 @@ A production-hardened reference implementation for bounded-recall, insight-spiki
 - **Insight Spike**: Real Gaussian noise injection via `logit_bias` using `tiktoken`.
 - **Bounded Recall**: Forgetting-aware memory buffer with 50-word thesis compression.
 
-### 🛡️ Enterprise Hardening (v0.3.0)
+### 🛡️ Enterprise Hardening (v0.4.0)
 - **Multi-LLM Abstraction**: Swap seamlessly between `OpenAI` and `Groq` (sub-150ms) via environment config.
 - **Distributed State**: Redis-backed session memory enables Kubernetes-native horizontal scaling.
 - **True Real-Time Streaming**: Token-by-token articulation with logistic temperature decay and human-like pauses.
@@ -236,6 +236,28 @@ This repository is maintained by Mourad Soltani.
 
 This project is licensed under the MIT License for non-commercial/open-source use. Commercial use requires acquisition (see `PRICING.md`).
 
+
+
+
+## Governed decision gateway (v0.4.0)
+
+Commercial surface for vendor onboarding:
+
+- `POST /decisions/vendor` — policy gate + optional orchestrator + evidence pack
+- `GET /audit/export` — hash-chained decision ledger
+
+See `ARR_PATH.md` for the product motion and `pilot-campaign/` for design-partner materials (one-pager, SOW, discovery script).
+
+## Run tests locally
+
+```bash
+python -m venv .venv && source .venv/bin/activate   # optional
+pip install -e ".[dev]"
+export OPENAI_API_KEY=sk-your-key   # dummy key is fine for unit tests
+pytest tests/ -v
+```
+
+Expected: **62 passed**. Coverage optional: `pytest tests/ --cov=src --cov-report=term-missing`.
 
 ## Live demo and latency
 

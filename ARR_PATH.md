@@ -20,3 +20,10 @@ $100M ARR is about 200 accounts at $500k, or 80 at $1.25M. It only happens if pi
 - `GET /audit/export` returns the chain.
 
 Policy defaults: auto-approve at or under $25k, human review above that, reject `restricted` data, monthly budget $250k.
+
+## Campaign materials
+
+Design-partner pack (one-pager, SOW, discovery script, outbound email):
+
+- Folder: `pilot-campaign/`
+- Zip: `pilot-campaign/Pilot-Campaign-Pack.zip`
