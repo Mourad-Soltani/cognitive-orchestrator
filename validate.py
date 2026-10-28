@@ -102,7 +102,14 @@ async def baseline_gpt4o(client: AsyncOpenAI, user_input: str) -> dict[str, Any]
 
 
 def score_response(result: dict[str, Any]) -> dict[str, float]:
-    """Compute Human-Likeness Score across 5 dimensions."""
+    """Structural process score — not a substitute for human raters.
+
+    Dimensions reward observable pipeline artifacts (modes, synthesis length,
+    bounded context, optional spike). They intentionally do NOT award points
+    for higher latency. Baseline GPT-4o is scored with the same function on a
+    shim shape so comparisons are structural, not "human-likeness" in the
+    psychometric sense. Treat >=15% as a process-coverage target, not science.
+    """
     scores = {
         "cognitive_diversity": 0.0,
         "reasoning_trace": 0.0,
@@ -110,20 +117,30 @@ def score_response(result: dict[str, Any]) -> dict[str, float]:
         "insight_spike": 0.0,
         "articulation_naturalness": 0.0,
     }
-    top_modes = [p["intuition"]["mode"] for p in result.get("top_intuitions", [])]
-    scores["cognitive_diversity"] = len(set(top_modes)) / 2.0
-    ds = result.get("dialectic_summary", "")
-    scores["reasoning_trace"] = 1.0 if len(ds) > 20 else 0.0
-    ie = result.get("insight_event", {})
+    top = result.get("top_intuitions", []) or []
+    top_modes = []
+    for item in top:
+        if isinstance(item, dict):
+            mode = (item.get("intuition") or {}).get("mode") or item.get("mode")
+            if mode:
+                top_modes.append(mode)
+    scores["cognitive_diversity"] = min(1.0, len(set(top_modes)) / 3.0)
+    ds = result.get("dialectic_summary") or result.get("final_output") or ""
+    # Graduated length score (not a binary giveaway)
+    scores["reasoning_trace"] = min(1.0, len(str(ds)) / 120.0)
+    ie = result.get("insight_event") or {}
     scores["insight_spike"] = 1.0 if ie.get("triggered") else 0.0
-    scores["articulation_naturalness"] = 1.0 if result.get("latency_ms", 0) > 200 else 0.5
-    scores["bounded_recall"] = 1.0
+    # Prefer coherent non-empty articulation; do not reward slowness
+    out = result.get("final_output") or ""
+    scores["articulation_naturalness"] = min(1.0, len(str(out).split()) / 25.0)
+    # Bounded recall: credit only when session context was actually present
+    scores["bounded_recall"] = 1.0 if result.get("context_used") else 0.4
     weights = {
         "cognitive_diversity": 0.25,
         "reasoning_trace": 0.25,
         "bounded_recall": 0.15,
-        "insight_spike": 0.15,
-        "articulation_naturalness": 0.20,
+        "insight_spike": 0.10,
+        "articulation_naturalness": 0.25,
     }
     aggregate = sum(scores[k] * weights[k] for k in scores)
     scores["aggregate"] = round(aggregate, 4)

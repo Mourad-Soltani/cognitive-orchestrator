@@ -5,13 +5,13 @@
   <img src="https://img.shields.io/badge/license-BSL%201.1-blue.svg" alt="License BSL 1.1">
   <img src="https://img.shields.io/badge/LLM-OpenAI%20%26%20Groq-brightgreen" alt="OpenAI & Groq">
   <img src="https://img.shields.io/badge/State-Redis-orange" alt="Redis State">
-  <img src="https://img.shields.io/badge/Status-Production%20Ready-brightgreen" alt="Production Ready">
+  <img src="https://img.shields.io/badge/Status-Hardened%20v0.4.1-brightgreen" alt="Production Ready">
 </p>
 
 # 🧠 Cognitive Orchestrator
 ## *Enterprise-Grade System 1 → System 2 Reasoning Engine*
 
-A production-hardened reference implementation for bounded-recall, insight-spiking cognitive architectures. Built to simulate human-like decision-making under strict **150ms latency** budgets while maintaining **stateless horizontal scalability**.
+A production-hardened reference implementation for bounded-recall, insight-spiking cognitive architectures. Built for bounded multi-stage reasoning with a **150ms arbiter timeout**, Redis-or-memory recency, and a **SQLite-durable** hash-chained decision ledger for governed vendor decisions.
 
 ---
 
@@ -26,10 +26,11 @@ A production-hardened reference implementation for bounded-recall, insight-spiki
 
 ### 🛡️ Enterprise Hardening (v0.4.0)
 - **Multi-LLM Abstraction**: Swap seamlessly between `OpenAI` and `Groq` (sub-150ms) via environment config.
-- **Distributed State**: Redis-backed session memory enables Kubernetes-native horizontal scaling.
-- **True Real-Time Streaming**: Token-by-token articulation with logistic temperature decay and human-like pauses.
+- **Distributed State**: Redis-backed session memory when available; automatic **in-memory fallback** if Redis is down.
+- **SSE articulation streaming**: Full cognitive pipeline, then paced SSE delivery with logistic temperature schedule and human-like pauses (post-pipeline streaming).
 - **Resilience Engine**: `tenacity` retries with exponential backoff + graceful fallback responses.
 - **Security First**: API Key authentication + `slowapi` rate limiting (DDoS protection).
+- **Durable audit**: Decision packs persist to SQLite (`data/decisions.sqlite`); `GET /audit/verify` checks the hash chain.
 
 ---
 
@@ -158,7 +159,7 @@ Run the production validation harness against baseline GPT-4o:
 ```bash
 python validate.py
 ```
-Expect a ≥15% improvement in Human-Likeness scores across 50 curated edge cases.
+Structural process score across 50 curated cases (modes, synthesis, articulation). Not a psychometric human study — use as a regression harness. Live provider calls required unless `--mock`.
 
 ### Run Unit Tests
 ```bash

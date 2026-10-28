@@ -1,10 +1,12 @@
 """Policy and evidence-pack tests for the commercial gateway."""
 
+from pathlib import Path
+
 from src.gateway import DecisionLedger, VendorDecisionRequest
 
 
-def test_auto_approve_under_threshold():
-    ledger = DecisionLedger()
+def test_auto_approve_under_threshold(tmp_path: Path):
+    ledger = DecisionLedger(db_path=tmp_path / "t.sqlite")
     request = VendorDecisionRequest(
         vendor_name="Northline Studio",
         spend_usd=12000,
@@ -20,7 +22,7 @@ def test_auto_approve_under_threshold():
 
 
 def test_restricted_data_is_rejected():
-    ledger = DecisionLedger()
+    ledger = DecisionLedger(db_path=None)
     request = VendorDecisionRequest(
         vendor_name="Shadow AI",
         spend_usd=1000,
@@ -34,7 +36,7 @@ def test_restricted_data_is_rejected():
 
 
 def test_spend_above_threshold_needs_human():
-    ledger = DecisionLedger()
+    ledger = DecisionLedger(db_path=None)
     request = VendorDecisionRequest(
         vendor_name="BigCloud",
         spend_usd=80000,
@@ -47,7 +49,7 @@ def test_spend_above_threshold_needs_human():
 
 
 def test_chain_links_packs():
-    ledger = DecisionLedger()
+    ledger = DecisionLedger(db_path=None)
     first = VendorDecisionRequest(
         vendor_name="A", spend_usd=1000, data_classification="public", country="US", business_owner="x"
     )
@@ -60,3 +62,23 @@ def test_chain_links_packs():
     exported = ledger.export()
     assert exported["decisions"] == 2
     assert exported["chain_head"] == p2.pack_hash
+    assert ledger.verify_chain()["ok"] is True
+
+
+def test_sqlite_survives_reload(tmp_path: Path):
+    path = tmp_path / "durable.sqlite"
+    ledger = DecisionLedger(db_path=path)
+    request = VendorDecisionRequest(
+        vendor_name="PersistCo",
+        spend_usd=5000,
+        data_classification="internal",
+        country="US",
+        business_owner="Ops",
+    )
+    status, reason = ledger.evaluate(request)
+    pack = ledger.record(request, status, reason)
+    reloaded = DecisionLedger(db_path=path)
+    assert reloaded.export()["decisions"] == 1
+    assert reloaded.packs[0].decision_id == pack.decision_id
+    assert reloaded.spend_usd == 5000
+    assert reloaded.verify_chain()["ok"] is True

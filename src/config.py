@@ -59,5 +59,11 @@ class Settings(BaseSettings):
     api_keys: str | None = Field(None, description="Comma-separated valid API keys")
     rate_limit: str = Field("10/minute", description="Default rate limit string")
 
+    # Decision ledger durability
+    decision_ledger_path: str = Field(
+        "data/decisions.sqlite",
+        description="SQLite path for hash-chained decision packs; empty disables durability",
+    )
+
 
 settings = Settings()

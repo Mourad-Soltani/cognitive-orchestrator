@@ -17,8 +17,8 @@ from src.gateway import DecisionLedger, VendorDecisionRequest
 
 
 _orchestrator: CognitiveOrchestrator | None = None
-_ledger = DecisionLedger()
-APP_VERSION = "0.4.0"
+_ledger = DecisionLedger(db_path=settings.decision_ledger_path or None)
+APP_VERSION = "0.4.1"
 
 
 @asynccontextmanager
@@ -48,11 +48,16 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 @app.get("/health")
 async def health() -> dict:
+    backend = "unknown"
+    if _orchestrator is not None and hasattr(_orchestrator.buffer, "backend"):
+        backend = _orchestrator.buffer.backend
     return {
         "status": "ok",
         "version": APP_VERSION,
         "provider": settings.llm_provider,
         "product": "governed-decision-gateway",
+        "ledger_durable": bool(settings.decision_ledger_path),
+        "recency_backend": backend,
     }
 
 
@@ -83,8 +88,14 @@ async def decide_vendor(
 
 @app.get("/audit/export")
 async def audit_export(api_key: str = Depends(validate_api_key)) -> dict:
-    """Hash-chained evidence packs for the current process."""
+    """Hash-chained evidence packs (SQLite-durable by default)."""
     return _ledger.export()
+
+
+@app.get("/audit/verify")
+async def audit_verify(api_key: str = Depends(validate_api_key)) -> dict:
+    """Recompute the decision hash chain and report integrity."""
+    return _ledger.verify_chain()
 
 
 @app.post("/orchestrate", response_model=OrchestratorResponse)
