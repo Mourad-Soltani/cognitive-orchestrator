@@ -7,8 +7,8 @@ Response to external suggestions. Verified against repo after v0.4.1 and this co
 | Paid pilot is highest leverage | **True** | Business action, not code |
 | Add CI + coverage badge workflow | **True gap** | Added `.github/workflows/ci.yml` |
 | Version 0.4.0 vs 0.4.1 drift | **Was real on remote** | Code is **0.4.1**; health test aligned |
-| 62 tests / ~85% coverage | **Understated** | Suite green; coverage previously measured ~91% on this host |
-| Full pipeline integration test | **Fair** | Added `tests/test_pipeline_integration.py` (stub LLM) |
+| 62 tests / ~85% coverage | **Understated; docs lagged** | **64 passed**, **~89% coverage** measured 2026-11-16 after v0.4.1 + integration test. README updated. |
+| Full pipeline integration test | **Present** | `tests/test_pipeline_integration.py` is on `main` (stub LLM, no network) |
 | Publish 50-case ≥15% GPT-4o results | **Overstated as proven** | `validate.py` exists; treat ≥15% as **unverified** until committed JSON from a real key run |
 | CONTRIBUTING.md / key-person risk | **Fair** | Added `CONTRIBUTING.md` |
 | BSL missing Change Date / Additional Use Grant | **False** | Already present in `LICENSE` |
@@ -21,3 +21,14 @@ Response to external suggestions. Verified against repo after v0.4.1 and this co
 ## Bottom line
 
 Diligence hygiene improved (CI, CONTRIBUTING, integration test). Valuation still hinges on **one paid pilot**.
+
+## Independent verification (2026-11-16)
+
+```text
+pytest tests/ -q --cov=src --cov-report=term
+→ 64 passed
+→ TOTAL coverage ~89% (833 statements, 91 missed)
+```
+
+`tests/test_pipeline_integration.py` is tracked in git. Public README metrics aligned to these numbers.
+The ≥15% GPT-4o claim remains **unverified** (no committed validate.py JSON from a live key run).

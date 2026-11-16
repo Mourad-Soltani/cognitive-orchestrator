@@ -165,7 +165,7 @@ Structural process score across 50 curated cases (modes, synthesis, articulation
 ```bash
 pytest tests/ --cov=src --cov-report=term-missing
 ```
-Current coverage: ~85% (including Redis mocks and streaming logic).
+Current coverage: **~89%** (measured 2026-11-16; Redis mocks and streaming included). CI runs pytest on every push (`.github/workflows/ci.yml`).
 
 ---
 
@@ -265,7 +265,7 @@ export OPENAI_API_KEY=sk-your-key   # dummy key is fine for unit tests
 pytest tests/ -v
 ```
 
-Expected: **62 passed**. Coverage optional: `pytest tests/ --cov=src --cov-report=term-missing`.
+Expected: **64 passed**. Coverage optional: `pytest tests/ --cov=src --cov-report=term-missing` (recently measured ~89%).
 
 ## Live demo and latency
 
