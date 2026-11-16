@@ -276,3 +276,24 @@ python demo.py
 ```
 
 Writes `reports/latency.json`. Measured median on 2026-10-06 was **0.109 ms** local overhead (p95 **0.347 ms**) across 50 mocked runs. See `LATENCY.md`. Provider round-trips are not included.
+
+## Deploy demo on Vercel
+
+```bash
+# Install Vercel CLI, then from repo root:
+npx vercel
+```
+
+Set environment variables in the Vercel project (optional for policy-only demo):
+
+| Variable | Value |
+|----------|--------|
+| `DEMO_MODE` | `1` |
+| `OPENAI_API_KEY` | your key (needed only if the decision path calls the LLM) |
+| `DECISION_LEDGER_PATH` | `/tmp/decisions.sqlite` |
+| `REDIS_URL` | leave empty (in-memory fallback) |
+
+The demo UI is served at `/` (`public/index.html`). API docs: `/docs`.
+Endpoints: `POST /decisions/vendor`, `GET /audit/export`, `GET /audit/verify`.
+
+Serverless note: the SQLite ledger on Vercel is **ephemeral** (resets on cold starts). For production pilots, use a persistent host (Railway, Fly, VPS).

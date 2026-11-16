@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     log_format: str = Field("json")
 
     # NEW: Infrastructure
-    redis_url: str | None = Field("redis://localhost:6379/0", description="Redis URL for distributed buffer")
+    redis_url: str | None = Field(None, description="Redis URL for distributed buffer; empty disables Redis")
     api_keys: str | None = Field(None, description="Comma-separated valid API keys")
     rate_limit: str = Field("10/minute", description="Default rate limit string")
 

@@ -69,11 +69,13 @@ async def decide_vendor(
     api_key: str = Depends(validate_api_key),
 ) -> dict:
     """Vendor-onboarding decision with policy gate and evidence pack."""
-    if _orchestrator is None:
+    import os
+    demo = os.getenv("DEMO_MODE", "").lower() in {"1", "true", "yes"}
+    if _orchestrator is None and not demo:
         raise HTTPException(status_code=503, detail="Orchestrator not initialized")
     status, reason = _ledger.evaluate(body)
     orchestrated = None
-    if status in {"approved", "needs_human"}:
+    if status in {"approved", "needs_human"} and not demo and _orchestrator is not None:
         prompt = (
             f"Vendor onboarding decision for {body.vendor_name}. "
             f"Spend ${body.spend_usd:.0f}. Data {body.data_classification}. "
@@ -82,6 +84,9 @@ async def decide_vendor(
         orchestrated = await _orchestrator.process(
             OrchestratorRequest(user_input=prompt, session_id=body.session_id)
         )
+    elif status in {"approved", "needs_human"} and demo:
+        # Policy-only demo path: no live LLM call
+        reason = reason + " [demo: policy gate only, no live LLM]"
     pack = _ledger.record(body, status, reason, orchestrated)
     return pack.model_dump()
 

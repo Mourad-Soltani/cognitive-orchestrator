@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cognitive Orchestrator — Governed Decision Demo</title>
+  <style>
+    :root {
+      --navy: #0b1f3a;
+      --accent: #1b6ca8;
+      --bg: #f4f7fb;
+      --line: #d0d7e2;
+      --ok: #1a7f4b;
+      --warn: #b45309;
+      --bad: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: #111;
+      line-height: 1.45;
+    }
+    header {
+      background: var(--navy);
+      color: #fff;
+      padding: 1.25rem 1.5rem;
+    }
+    header h1 { margin: 0 0 0.25rem; font-size: 1.25rem; }
+    header p { margin: 0; opacity: 0.85; font-size: 0.9rem; }
+    main {
+      max-width: 880px;
+      margin: 1.5rem auto;
+      padding: 0 1rem 2rem;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    label { display: block; font-size: 0.8rem; font-weight: 600; margin: 0.6rem 0 0.25rem; color: var(--navy); }
+    input, select, textarea {
+      width: 100%;
+      padding: 0.55rem 0.65rem;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      font: inherit;
+    }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    @media (max-width: 640px) { .row { grid-template-columns: 1fr; } }
+    button {
+      margin-top: 1rem;
+      background: var(--accent);
+      color: #fff;
+      border: 0;
+      border-radius: 6px;
+      padding: 0.7rem 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.6; cursor: wait; }
+    .status {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .approved { background: #dcfce7; color: var(--ok); }
+    .needs_human { background: #ffedd5; color: var(--warn); }
+    .rejected, .budget_blocked { background: #fee2e2; color: var(--bad); }
+    pre {
+      background: #0b1f3a;
+      color: #e2e8f0;
+      padding: 1rem;
+      border-radius: 8px;
+      overflow: auto;
+      font-size: 0.78rem;
+    }
+    .muted { color: #4a5568; font-size: 0.85rem; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Cognitive Orchestrator</h1>
+    <p>Governed vendor-onboarding demo — policy gate + hash-chained evidence pack</p>
+  </header>
+  <main>
+    <div class="card">
+      <p class="muted">
+        Submit a vendor decision. The gate applies spend / data-class policy, optionally runs the reasoning pipeline,
+        and writes a SHA-256 evidence pack. Open API docs at <a href="/docs">/docs</a>.
+      </p>
+      <form id="form">
+        <div class="row">
+          <div>
+            <label for="vendor_name">Vendor name</label>
+            <input id="vendor_name" required value="Northline Analytics" />
+          </div>
+          <div>
+            <label for="spend_usd">Spend (USD)</label>
+            <input id="spend_usd" type="number" min="0" step="100" required value="12000" />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="data_classification">Data classification</label>
+            <select id="data_classification">
+              <option value="public">public</option>
+              <option value="internal" selected>internal</option>
+              <option value="confidential">confidential</option>
+              <option value="restricted">restricted</option>
+            </select>
+          </div>
+          <div>
+            <label for="country">Country</label>
+            <input id="country" required value="US" />
+          </div>
+        </div>
+        <label for="business_owner">Business owner</label>
+        <input id="business_owner" required value="A. Chen" />
+        <label for="notes">Notes</label>
+        <textarea id="notes" rows="2">Pilot SaaS for procurement analytics</textarea>
+        <button type="submit" id="submit">Run decision</button>
+      </form>
+    </div>
+
+    <div class="card" id="result-card" hidden>
+      <h2 style="margin-top:0;font-size:1.05rem;">Evidence pack</h2>
+      <p>Status: <span id="status" class="status"></span></p>
+      <p id="reason" class="muted"></p>
+      <p class="muted">Pack hash: <code id="pack_hash"></code></p>
+      <pre id="json"></pre>
+    </div>
+
+    <div class="card">
+      <button type="button" id="export">Export ledger</button>
+      <button type="button" id="verify" style="background:#0b1f3a;margin-left:0.5rem;">Verify chain</button>
+      <pre id="ledger" hidden></pre>
+    </div>
+  </main>
+  <script>
+    const form = document.getElementById('form');
+    const submit = document.getElementById('submit');
+    const resultCard = document.getElementById('result-card');
+    const headers = { 'Content-Type': 'application/json', 'X-API-Key': 'demo' };
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      submit.disabled = true;
+      submit.textContent = 'Running…';
+      try {
+        const body = {
+          vendor_name: document.getElementById('vendor_name').value,
+          spend_usd: Number(document.getElementById('spend_usd').value),
+          data_classification: document.getElementById('data_classification').value,
+          country: document.getElementById('country').value,
+          business_owner: document.getElementById('business_owner').value,
+          notes: document.getElementById('notes').value,
+          session_id: 'vercel-demo',
+        };
+        const res = await fetch('/decisions/vendor', {
+          method: 'POST', headers, body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || res.statusText);
+        resultCard.hidden = false;
+        const st = document.getElementById('status');
+        st.textContent = data.status;
+        st.className = 'status ' + data.status;
+        document.getElementById('reason').textContent = data.reason || '';
+        document.getElementById('pack_hash').textContent = data.pack_hash || '';
+        document.getElementById('json').textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        alert('Request failed: ' + err.message);
+      } finally {
+        submit.disabled = false;
+        submit.textContent = 'Run decision';
+      }
+    });
+
+    document.getElementById('export').addEventListener('click', async () => {
+      const res = await fetch('/audit/export', { headers });
+      const data = await res.json();
+      const el = document.getElementById('ledger');
+      el.hidden = false;
+      el.textContent = JSON.stringify(data, null, 2);
+    });
+
+    document.getElementById('verify').addEventListener('click', async () => {
+      const res = await fetch('/audit/verify', { headers });
+      const data = await res.json();
+      const el = document.getElementById('ledger');
+      el.hidden = false;
+      el.textContent = JSON.stringify(data, null, 2);
+    });
+  </script>
+</body>
+</html>
